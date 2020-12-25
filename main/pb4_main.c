@@ -2,6 +2,7 @@
 #include "freertos/task.h"
 
 #include "pb4_gpio.h"
+#include "pb4_sensor.h"
 #include "pb4_touch.h"
 
 
@@ -14,6 +15,10 @@ esp_timer_handle_t xFlush1Timer, xFlush2Timer;
 
 static void vMainFlushStop(const gpio_num_t *eGpioNum) {
     vGpioWrite(*eGpioNum, false);
+}
+
+
+static void vMainSensorCallback() {
 }
 
 
@@ -46,7 +51,9 @@ static void vMainTouchCallback(touch_pad_t eTouchPad, bool bTouchState) {
 
 _Noreturn void app_main(void) {
     vGpioInit();
+    vSensorInit();
     vTouchInit();
+
 
     gpio_num_t eGpioFlush1 = PB4_GPIO_FLUSH_1;
     esp_timer_create(&(esp_timer_create_args_t) {
@@ -63,6 +70,17 @@ _Noreturn void app_main(void) {
             .dispatch_method = ESP_TIMER_TASK,
             .name = "Flush2",
     }, &xFlush2Timer);
+
+
+    xTaskCreate(
+            (TaskFunction_t) tSensorPoll,
+            "sensorPoll",
+            2048,
+            vMainSensorCallback,
+            1,
+            NULL
+    );
+
 
     xTaskCreate(
             tTouchCalibrate,
@@ -81,6 +99,7 @@ _Noreturn void app_main(void) {
             1,
             NULL
     );
+
 
     for (uint8_t cnt = 0;; ++cnt) {
         vGpioWrite(PB4_GPIO_LED_B, true);

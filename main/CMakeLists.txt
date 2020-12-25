@@ -2,6 +2,7 @@ idf_component_register(
         SRCS
         "pb4_main.c"
         "pb4_gpio.c"
+        "pb4_sensor.c"
         "pb4_touch.c"
         INCLUDE_DIRS
         "."
