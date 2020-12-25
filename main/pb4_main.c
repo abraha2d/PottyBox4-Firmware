@@ -82,10 +82,10 @@ _Noreturn void app_main(void) {
             NULL
     );
 
-    int cnt = 0;
-    for (;;) {
-        vGpioWrite(PB4_GPIO_S1_LED, cnt++ % 2);
-        vGpioWrite(PB4_GPIO_S1_SHUT, cnt++ % 2);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+    for (uint8_t cnt = 0;; ++cnt) {
+        vGpioWrite(PB4_GPIO_LED_B, true);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vGpioWrite(PB4_GPIO_LED_B, false);
+        vTaskDelay(1900 / portTICK_PERIOD_MS);
     }
 }
