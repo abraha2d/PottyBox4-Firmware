@@ -100,7 +100,7 @@ void vGpioInit(void) {
     prvGpioConfig(PB4_GPIO_FLUSH_1, false);
     prvGpioConfig(PB4_GPIO_FLUSH_2, false);
 
-    prvGpioTest();
+//    prvGpioTest();
 }
 
 

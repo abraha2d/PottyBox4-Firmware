@@ -18,7 +18,8 @@ static void vMainFlushStop(const gpio_num_t *eGpioNum) {
 }
 
 
-static void vMainSensorCallback() {
+static void vMainSensorCallback(uint16_t usDist, uint16_t usAmpl) {
+    printf("Dist\tAmpl\n%u\t%u\n", usDist, usAmpl);
 }
 
 
@@ -77,7 +78,7 @@ _Noreturn void app_main(void) {
             "sensorPoll",
             2048,
             vMainSensorCallback,
-            1,
+            5,
             NULL
     );
 
@@ -87,7 +88,7 @@ _Noreturn void app_main(void) {
             "touchCalibrate",
             2048,
             NULL,
-            1,
+            10,
             NULL
     );
 
@@ -96,7 +97,7 @@ _Noreturn void app_main(void) {
             "touchPoll",
             2048,
             vMainTouchCallback,
-            1,
+            10,
             NULL
     );
 
