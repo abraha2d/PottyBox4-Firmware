@@ -4,7 +4,7 @@
 
 
 #define PB4_SENSOR_I2C_PORT                 I2C_NUM_0
-#define PB4_SENSOR_I2C_ADDR                 0x52
+#define PB4_SENSOR_I2C_ADDR                 0x4C
 
 
 typedef void (*pb4_sensor_callback_t)(uint16_t, uint16_t);

@@ -99,7 +99,7 @@ void vSensorInit(void) {
             .scl_io_num = 22,
             .sda_pullup_en = true,
             .scl_pullup_en = true,
-            .master.clk_speed = 400000,
+            .master.clk_speed = 100000,
     };
     ESP_ERROR_CHECK(i2c_param_config(PB4_SENSOR_I2C_PORT, &sConfig));
     ESP_ERROR_CHECK(i2c_driver_install(
