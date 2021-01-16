@@ -66,7 +66,7 @@
 // #include "vl53l1_platform_log.h"
 #include "vl53l1_api.h"
 
-// #include "stm32xxx_hal.h"
+#include "driver/i2c.h"
 #include <string.h>
 // #include <time.h>
 // #include <math.h>
@@ -111,6 +111,40 @@
 //    int status = 0;
 //    return Status;
 // }
+
+esp_err_t _I2CWrite(VL53L1_DEV Dev, uint8_t reg, uint8_t *pdata, uint32_t count) {
+    esp_err_t err;
+    i2c_cmd_handle_t cmdLink;
+
+    cmdLink = i2c_cmd_link_create();
+    i2c_master_start(cmdLink);
+    i2c_master_write_byte(cmdLink, (Dev->I2cDevAddr << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmdLink, reg, true);
+    i2c_master_write(cmdLink, pdata, count, false);
+    i2c_master_stop(cmdLink);
+
+    err = i2c_master_cmd_begin(I2C_NUM_0, cmdLink, 10 / portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmdLink);
+    return err;
+}
+
+esp_err_t _I2CRead(VL53L1_DEV Dev, uint8_t reg, uint8_t *pdata, uint32_t count) {
+    esp_err_t err;
+    i2c_cmd_handle_t cmdLink;
+
+    cmdLink = i2c_cmd_link_create();
+    i2c_master_start(cmdLink);
+    i2c_master_write_byte(cmdLink, (Dev->I2cDevAddr << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(cmdLink, reg, true);
+    i2c_master_start(cmdLink);
+    i2c_master_write_byte(cmdLink, (Dev->I2cDevAddr << 1) | I2C_MASTER_READ, true);
+    i2c_master_read(cmdLink, pdata, count, I2C_MASTER_LAST_NACK);
+    i2c_master_stop(cmdLink);
+
+    err = i2c_master_cmd_begin(I2C_NUM_0, cmdLink, 10 / portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmdLink);
+    return err;
+}
 
 VL53L1_Error VL53L1_WriteMulti(VL53L1_DEV Dev, uint16_t index, uint8_t *pdata, uint32_t count) {
     VL53L1_Error Status = VL53L1_ERROR_NONE;
