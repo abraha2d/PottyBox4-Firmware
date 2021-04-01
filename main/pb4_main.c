@@ -76,7 +76,7 @@ _Noreturn void app_main(void) {
     xTaskCreate(
             (TaskFunction_t) tSensorPoll,
             "sensorPoll",
-            2048,
+            4096,
             vMainSensorCallback,
             5,
             NULL

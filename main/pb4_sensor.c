@@ -1,98 +1,13 @@
-#include <ctype.h>
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 #include "pb4_sensor.h"
 
 
-static void prvSensorWriteReg(uint8_t ucReg, uint8_t *pucData, size_t uxDataLen) {
-    i2c_cmd_handle_t pvCmdHandle = i2c_cmd_link_create();
-    ESP_ERROR_CHECK(i2c_master_start(pvCmdHandle));
-    ESP_ERROR_CHECK(i2c_master_write_byte(pvCmdHandle, (PB4_SENSOR_I2C_ADDR << 1) | I2C_MASTER_WRITE, true));
-    ESP_ERROR_CHECK(i2c_master_write_byte(pvCmdHandle, ucReg, true));
-    ESP_ERROR_CHECK(i2c_master_write(pvCmdHandle, pucData, uxDataLen, false));
-    ESP_ERROR_CHECK(i2c_master_stop(pvCmdHandle));
-
-    ESP_ERROR_CHECK(i2c_master_cmd_begin(PB4_SENSOR_I2C_PORT, pvCmdHandle, 10 / portTICK_PERIOD_MS));
-
-    i2c_cmd_link_delete(pvCmdHandle);
-}
-
-
-static void prvSensorReadReg(uint8_t ucReg, uint8_t *pucData, size_t uxDataLen) {
-    i2c_cmd_handle_t pvCmdHandle = i2c_cmd_link_create();
-    ESP_ERROR_CHECK(i2c_master_start(pvCmdHandle));
-    ESP_ERROR_CHECK(i2c_master_write_byte(pvCmdHandle, (PB4_SENSOR_I2C_ADDR << 1) | I2C_MASTER_WRITE, true));
-    ESP_ERROR_CHECK(i2c_master_write_byte(pvCmdHandle, ucReg, true));
-    ESP_ERROR_CHECK(i2c_master_start(pvCmdHandle));
-    ESP_ERROR_CHECK(i2c_master_write_byte(pvCmdHandle, (PB4_SENSOR_I2C_ADDR << 1) | I2C_MASTER_READ, true));
-    ESP_ERROR_CHECK(i2c_master_read(pvCmdHandle, pucData, uxDataLen, I2C_MASTER_LAST_NACK));
-    ESP_ERROR_CHECK(i2c_master_stop(pvCmdHandle));
-
-    ESP_ERROR_CHECK(i2c_master_cmd_begin(PB4_SENSOR_I2C_PORT, pvCmdHandle, 10 / portTICK_PERIOD_MS));
-
-    i2c_cmd_link_delete(pvCmdHandle);
-}
-
-
-static void vSensorPowerOn() {
-    // Reset
-    pb4_reg_cmd.data[0] = 0;
-    prvSensorWriteReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
-    pb4_reg_cmd.reset = 1;
-    prvSensorWriteReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
-
-    // Check Standby Status
-    do {
-        prvSensorReadReg(PB4_SENSOR_REG_DEVSTATUS_ADR, pb4_reg_devstatus.data, PB4_SENSOR_REG_DEVSTATUS_LEN);
-    } while (pb4_reg_devstatus.pmStatus != PB4_SENSOR_PMSTATUS_STANDBY);
-
-    // Configure I2C Interface
-    pb4_reg_i2cinitcfg.data[0] = 0;
-    pb4_reg_i2cinitcfg.autoInc = 1;
-    pb4_reg_i2cinitcfg.MCPUDebugAccess = 1;
-    prvSensorWriteReg(PB4_SENSOR_REG_I2CINITCFG_ADR, pb4_reg_i2cinitcfg.data, PB4_SENSOR_REG_I2CINITCFG_LEN);
-
-    // Set MCPU_OFF
-    pb4_reg_cmd.data[0] = 0;
-    pb4_reg_cmd.cmdOpcode = PB4_SENSOR_CMDOPCODE_MCPUOFF;
-    pb4_reg_cmd.valid = 1;
-    prvSensorWriteReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
-
-    do {
-        prvSensorReadReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
-    } while (pb4_reg_cmd.valid == 1);
-
-    // Check MCPU_OFF Status
-    do {
-        prvSensorReadReg(PB4_SENSOR_REG_DEVSTATUS_ADR, pb4_reg_devstatus.data, PB4_SENSOR_REG_DEVSTATUS_LEN);
-    } while (pb4_reg_devstatus.pmStatus != PB4_SENSOR_PMSTATUS_MCPUOFF);
-
-    // Set Initialization
-    pb4_reg_pmucfg.data[0] = 0;
-    pb4_reg_pmucfg.data[1] = 0;
-    pb4_reg_pmucfg.MCPUInitState = 1;
-    pb4_reg_pmucfg.reserved3 = 1;
-    prvSensorWriteReg(PB4_SENSOR_REG_PMUCFG_ADR, pb4_reg_pmucfg.data, PB4_SENSOR_REG_PMUCFG_LEN);
-
-    // Set MCPU_ON
-    pb4_reg_cmd.cmdOpcode = PB4_SENSOR_CMDOPCODE_MCPUON;
-    pb4_reg_cmd.valid = 1;
-    prvSensorWriteReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
-
-    do {
-        prvSensorReadReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
-    } while (pb4_reg_cmd.valid == 1);
-
-    // Check MCPU_ON Status
-    do {
-        prvSensorReadReg(PB4_SENSOR_REG_DEVSTATUS_ADR, pb4_reg_devstatus.data, PB4_SENSOR_REG_DEVSTATUS_LEN);
-    } while (pb4_reg_devstatus.pmStatus != PB4_SENSOR_PMSTATUS_MCPUON);
-}
-
-
 void vSensorInit(void) {
+    ESP_ERROR_CHECK(gpio_reset_pin(5));
+    ESP_ERROR_CHECK(gpio_set_direction(5, GPIO_MODE_OUTPUT));
+    ESP_ERROR_CHECK(gpio_set_level(5, 1));
     i2c_config_t sConfig = {
             .mode = I2C_MODE_MASTER,
             .sda_io_num = 21,
@@ -101,37 +16,99 @@ void vSensorInit(void) {
             .scl_pullup_en = true,
             .master.clk_speed = 400000,
     };
-    ESP_ERROR_CHECK(i2c_param_config(PB4_SENSOR_I2C_PORT, &sConfig));
+    ESP_ERROR_CHECK(i2c_param_config(I2C_NUM_0, &sConfig));
     ESP_ERROR_CHECK(i2c_driver_install(
-            PB4_SENSOR_I2C_PORT,
+            I2C_NUM_0,
             sConfig.mode,
             0, 0,
             ESP_INTR_FLAG_IRAM
     ));
+    Dev.I2cDevAddr = 0x29;
+    VL53L1_Error err;
+    err = VL53L1_WaitDeviceBooted(&Dev);
+    if (err != VL53L1_ERROR_NONE) printf("WaitDeviceBooted err %i\n", err);
+    err = VL53L1_DataInit(&Dev);
+    if (err != VL53L1_ERROR_NONE) printf("DataInit err %i\n", err);
+    err = VL53L1_StaticInit(&Dev);
+    if (err != VL53L1_ERROR_NONE) printf("StaticInit err %i\n", err);
+    err = VL53L1_PerformRefSpadManagement(&Dev);
+    if (err != VL53L1_ERROR_NONE) printf("PerformRefSpadManagement err %i\n", err);
+    err = VL53L1_SetMeasurementTimingBudgetMicroSeconds(&Dev, 4529);
+    if (err != VL53L1_ERROR_NONE) printf("SetMeasurementTimingBudgetMicroSeconds err %i\n", err);
+    err = VL53L1_SetInterMeasurementPeriodMilliSeconds(&Dev, 8);
+    if (err != VL53L1_ERROR_NONE) printf("SetInterMeasurementPeriodMilliSeconds err %i\n", err);
+    err = VL53L1_SetDistanceMode(&Dev, VL53L1_DISTANCEMODE_SHORT);
+    if (err != VL53L1_ERROR_NONE) printf("SetDistanceMode err %i\n", err);
+}
+
+
+char color[17];
+char* getColor(int16_t range) {
+    sprintf(color, "\e[48;2;%u;0;0m", range < 1000 ? 255 - range / 4 : 0);
+    return color;
+    if (range < 20) {
+        return COLOR_RED;
+    } else if (20 < range && range < 55) {
+        return COLOR_YEL;
+    } else if (55 < range && range < 148) {
+        return COLOR_GRN;
+    } else if (148 < range && range < 403) {
+        return COLOR_BLU;
+    } else if (403 < range && range < 1097) {
+        return COLOR_MAG;
+    } else {
+        return COLOR_BLK;
+    }
 }
 
 
 void tSensorPoll(pb4_sensor_callback_t pxSensorCallback) {
-    vSensorPowerOn();
+    VL53L1_Error err;
+    uint8_t measurementDataReady;
+    VL53L1_RangingMeasurementData_t rangingMeasurementData;
+
+    int16_t image[13][13];
+
+    VL53L1_UserRoi_t roiConfig;
+
     for (;;) {
-        // Single Measure Command
-        pb4_reg_cmd.cmdOpcode = PB4_SENSOR_CMDOPCODE_SINGLEMEASURE;
-        pb4_reg_cmd.valid = 1;
-        prvSensorWriteReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
+        for (int y = 0; y < 13; ++y) {
+            for (int x = 0; x < 13; ++x) {
+                vTaskDelay(0);
 
-        do {
-            prvSensorReadReg(PB4_SENSOR_REG_CMD_ADR, pb4_reg_cmd.data, PB4_SENSOR_REG_CMD_LEN);
-        } while (pb4_reg_cmd.valid == 1);
+                roiConfig.TopLeftX = x;
+                roiConfig.TopLeftY = 15 - y;
+                roiConfig.BotRightX = x + 3;
+                roiConfig.BotRightY = 12 - y;
+                err = VL53L1_SetUserROI(&Dev, &roiConfig);
+                if (err != VL53L1_ERROR_NONE) printf("SetUserROI err %i\n", err);
 
-        // Check Data Ready
-        do {
-            prvSensorReadReg(PB4_SENSOR_REG_ICSR_ADR, pb4_reg_icsr.data, PB4_SENSOR_REG_ICSR_LEN);
-        } while (pb4_reg_icsr.intStatus_Data != 1);
+                err = VL53L1_StartMeasurement(&Dev);
+                if (err != VL53L1_ERROR_NONE) printf("StartMeasurement err %i\n", err);
 
-        // Read Result Distance, Amplitude
-        prvSensorReadReg(PB4_SENSOR_REG_RESULT_ADR, pb4_reg_result.data, PB4_SENSOR_REG_RESULT_LEN);
-        prvSensorReadReg(PB4_SENSOR_REG_RSLTCNFD_ADR, pb4_reg_rsltcnfd.data, PB4_SENSOR_REG_RSLTCNFD_LEN);
+                do {
+                    vTaskDelay(0);
+                    err = VL53L1_GetMeasurementDataReady(&Dev, &measurementDataReady);
+                    if (err != VL53L1_ERROR_NONE) printf("GetMeasurementDataReady err %i\n", err);
+                } while (measurementDataReady != 1);
 
-        pxSensorCallback(pb4_reg_result.distance, pb4_reg_rsltcnfd.vecAmpl);
+                err = VL53L1_GetRangingMeasurementData(&Dev, &rangingMeasurementData);
+                if (err != VL53L1_ERROR_NONE) printf("GetRangingMeasurementData err %i\n", err);
+
+                image[y][12-x] = rangingMeasurementData.RangeMilliMeter;
+
+                err = VL53L1_StopMeasurement(&Dev);
+                if (err != VL53L1_ERROR_NONE) printf("StopMeasurement err %i\n", err);
+            }
+        }
+
+        printf("\e[H\e[2J\e[3J");
+
+        for (int y = 0; y < 13; ++y) {
+            for (int x = 0; x < 13; ++x) {
+                printf("%s  %s", getColor(image[y][x]), "\e[0m");
+            }
+            printf("\n");
+        }
     }
 }
